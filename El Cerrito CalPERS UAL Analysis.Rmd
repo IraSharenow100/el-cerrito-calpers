@@ -1,0 +1,924 @@
+---
+title: "Analysis of El Cerrito's UAL"
+author: "Ira Sharenow"
+date: "2025-07-06"
+output:
+  word_document: default
+  
+
+---
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(tidyverse)
+library(readxl)
+library(flextable)
+library(scales)
+library(janitor)
+
+
+# Define base theme for charts
+theme_base <- theme_bw() +
+  theme(
+    axis.line = element_line(colour = "black"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.border = element_blank(),
+    panel.background = element_blank(),
+    plot.title = element_text(hjust = 0.5, size = 20, face = "bold"),
+    legend.position = "none"
+  )
+
+```
+
+```{r path-setup}
+# Set full path to spreadsheet
+excel_path <- "D:/Documents/Employment/2025 job search/Project 2025/CalPERS Project/Composite All.xlsx"
+```
+
+
+## Background
+
+The city of El Cerrito is in significant financial difficulty. At the June 17, 2025 council meeting, management projected deficit spending for the General Fund for the next ten years even with a number of needed infrastructure expenditures not accounted for [1]. There have already been service cuts
+The primary financial liability is El Cerrito’s CalPERS Unfunded Accrued Liability (UAL). The current debt is over $89 million as measured by CalPERS [2]. That number is based on a number of overly optimistic assumptions, especially the assumption of a 6.8% return. Private pension funds use rates of around 5% [3]. The UAL debt is about $3500 per resident. The next payment amount is $8 million out of a budget of $54 million, so 15% of the budget goes to pay the UAL.
+
+**Table 1** is a basic UAL Summary.
+
+
+
+```{r ual-summary}
+UAL_Summary <- read_excel(excel_path, sheet = "UAL Summary")
+UAL_Summary %>%
+  mutate(
+    UAL = dollar(UAL, accuracy = 1),
+    UAL_Payment = dollar(UAL_Payment, accuracy = 1)
+  ) %>%
+  flextable() %>%
+  set_caption("Table 1: UAL Summary") %>%
+  bold(i = c(1, 2, 6), bold = TRUE) %>%       # added
+  color(i = c(1, 2, 6), color = "red") %>%    # added
+  set_header_labels(
+    Plan = "Plan",
+    UAL = "Unfunded Accrued Liability",
+    UAL_Payment = "FY 2026 UAL Payment"
+  ) %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  autofit()
+```
+
+
+In 2017, Stanford researcher Joe Nation wrote a report that predicted that in California cities pension payments would *crowd out* basic services [4]. This is already occurring. In March 2020, El Cerrito permanently closed its senior center. At the June 2025 budget hearing, the city manager stated the city could not afford to staff a senior center even if the space was provided for free. The council was unable to find the funds for a fire truck and fire related safety equipment and programs. The city could not fully fund swimming pool repairs. See the appendix of this document for a summary of Nation’s report and of a more recent report
+
+El Cerrito public employees receive pension benefits from the California CalPERS department. In the 1990s the benefits became incredibly generous and so the plans went from fully funded to considerably underfunded. As a consequence, cities, in addition to paying their standard CalPERS payments, known as “Normal Cost,” have to make additional payments to cover the underfunded amount. This is known as the “Unfunded Accrued Liability (UAL)”.
+About fifteen years ago, then Gov. Jerry Brown worked to reduce pension benefits for new hires. As of January 1, 2013 new hires were under the new plan. This plan goes by the acronym PEPRA. And so El Cerrito has five plans:
+Safety Classic
+Miscellaneous Classic
+Fire PEPRA
+Police PEPRA
+Miscellaneous PEPRA
+
+Uniformed firefighters and police officers make up the safety category. Everyone else is in the miscellaneous category.
+
+Since the two classic plans are responsible for more than 90% of the UAL in El Cerrito, most of this report focuses on those two plans.
+The plan debt continues to grow for a number reasons. CalPERS assumes a 2.8% growth in compensation, but the actual increase has been much greater [5]. For example, in July 2024 firefighters received a 4.5% pay increase. If the minimum Normal Cost payments assumptions were met exactly, the UAL would not increase. But when the pay increases exceed the assumption and when other assumptions are not attained, then the UAL increases.
+
+The California state auditor gave El Cerrito zero points for pension costs and zero points for future pension costs. [6]. 
+The California Policy Center gave El Cerrito an F for pension costs and for pension obligations [7].
+
+
+
+## Analyzing the CalPERS Reports for El Cerrito
+
+
+The plan now is to go through the Actuarial Valuation for the Plans of the City of El Cerrito as of June 30, 2023, the most recent data. The focus will be on the classic safety plan and the classic miscellaneous plan.
+
+The goal is to have a funded ratio above 80%. The safety plan and the miscellaneous plans have funded ratios of 64%. 
+
+**Table 2** contains some of the basic data for El Cerrito.
+
+
+```{r funded-ratio}
+FR1 <- read_excel(excel_path, sheet = "Funded Ratio") %>%
+  mutate(Category = `Category_20230630`,
+         Value = gsub("[$,%]", "", Value),
+         Value = as.numeric(gsub(",", "", Value))) %>%
+  select(Category, Value, Plan) %>%
+  pivot_wider(names_from = Plan, values_from = Value, names_prefix = "", values_fn = list) %>%
+  unnest(cols = everything()) %>%
+  rename(Classic_Safety = `Classic Safety`,
+         Classic_Misc = `Classic Misc`) %>%
+  mutate(
+    Classic_Safety = case_when(
+      row_number() <= 4 ~ dollar(Classic_Safety, accuracy = 1),
+      row_number() == 5 ~ percent(Classic_Safety / 100, accuracy = 0.1)
+    ),
+    Classic_Misc = case_when(
+      row_number() <= 4 ~ dollar(Classic_Misc, accuracy = 1),
+      row_number() == 5 ~ percent(Classic_Misc / 100, accuracy = 0.1)
+    )
+  ) %>%
+  select(Category, Classic_Safety, Classic_Misc)
+
+flextable(FR1) %>%
+  set_header_labels(
+    Category = "Category",
+    Classic_Safety = "Classic Safety",
+    Classic_Misc = "Classic Misc"
+  ) %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  bold(i = c(4, 5), j = c(2,3), bold = TRUE) %>%             # added
+  color(i = c(4, 5), j = c(2,3), color = "red") %>%          # added
+  autofit() %>%
+  set_caption("Table 2: Funded Status – Funding Policy Basis")
+```
+
+\newpage
+```{r chart-funded-ratio}
+funded_values <- FR1 %>%
+  filter(grepl("Funded Ratio", Category)) %>%
+  mutate(
+    Classic_Safety = as.numeric(gsub("[^0-9.]", "", Classic_Safety)),
+    Classic_Misc = as.numeric(gsub("[^0-9.]", "", Classic_Misc))
+  )
+
+funded_plot_data <- tibble::tibble(
+  Plan = c("Classic Safety", "Classic Misc"),
+  Funded_Ratio = c(funded_values$Classic_Safety, funded_values$Classic_Misc)
+) %>%
+  mutate(Plan = factor(Plan, levels = rev(Plan)))  # Reverse order per user preference
+
+ggplot(funded_plot_data, aes(x = Plan, y = Funded_Ratio)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = paste0(Funded_Ratio, "%")), vjust = -0.5, size = 5) +
+  geom_hline(yintercept = 80, color = "red", linetype = "dashed", size = 1) +
+  annotate("text", x = 1.5, y = 82, label = "Below 80% is considered at-risk", color = "black", vjust = -1) +
+  ylim(0, 100) +
+  labs(
+    title = "Chart 2: Funded Ratio by Plan",
+    y = "Funded Ratio (%)",
+    x = NULL
+  ) +
+  theme_minimal(base_size = 14)
+```
+
+\newpage
+
+**Table 3** is a sensitivity analysis and shows the impact of potential changes in the discount rate.
+For example, for the classic safety plan if the discount rate is lowered from 6.8% to 5.8%, the UAL will go from $62,455,219 to $84,772,527. Recall that private pension programs use a discount rate of about 5%. In the fall of 2025, CalPERS will be reviewing its assumptions.
+
+
+
+
+```{r funded-ratio-discount}
+FR_Discount <- read_excel(excel_path, sheet = "Funded Ratio Discount Rate") %>%
+  rename(
+    Category = Discount_Rate,
+    `5.8%` = Discount_Rate_058,
+    `6.8%` = Discount_Rate_068,
+    `7.8%` = Discount_Rate_078
+  ) %>%
+  mutate(
+    Category = trimws(Category),
+    `5.8%` = case_when(
+      grepl("Funded Ratio", Category) ~ percent(`5.8%`, accuracy = 0.1),
+      TRUE ~ dollar(`5.8%`, accuracy = 1)
+    ),
+    `6.8%` = case_when(
+      grepl("Funded Ratio", Category) ~ percent(`6.8%`, accuracy = 0.1),
+      TRUE ~ dollar(`6.8%`, accuracy = 1)
+    ),
+    `7.8%` = case_when(
+      grepl("Funded Ratio", Category) ~ percent(`7.8%`, accuracy = 0.1),
+      TRUE ~ dollar(`7.8%`, accuracy = 1)
+    )
+  ) %>%
+  select(Plan, Category, `5.8%`, `6.8%`, `7.8%`)
+
+flextable(FR_Discount) %>%
+  set_caption("Table 3: Funded Ratio – Discount Rate Sensitivity") %>%
+  set_header_labels(
+    Plan = "Plan",
+    Category = "Category",
+    `5.8%` = "5.8% Discount Rate",
+    `6.8%` = "6.8% Discount Rate",
+    `7.8%` = "7.8% Discount Rate"
+  ) %>%
+   bold(i = c(3, 4, 7, 8), j = c(2, 3, 4), bold = TRUE) %>% #new
+  color(i = c(3, 4, 7, 8), j = c(2, 3, 4), color = "red") %>% #new
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  set_table_properties(width = 0.9, layout = "autofit") |> 
+  autofit()
+```
+
+
+\newpage
+
+**Table 4** shows declining UAL, but that is only because CalPERS makes optimistic assumptions. Contrary to the advice of the California State Auditor, El Cerrito only makes minimum payments. As the CalPERS assumptions are too optimistic, the UAL continues to grow.
+
+
+
+```{r}
+Amort_Sch <- read_excel(excel_path, sheet = "Amort Sch") %>%
+  filter(FY <= 2030) %>%
+  mutate(
+    FY = as.character(FY),
+    Balance = as.numeric(Balance),
+    Payment = as.numeric(Payment)
+  )
+
+Amort_totals <- Amort_Sch %>%
+  group_by(FY) %>%
+  summarise(
+    Plan = "Total All Plans",
+    Balance = sum(Balance, na.rm = TRUE),
+    Payment = sum(Payment, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+Amort_combined <- bind_rows(Amort_totals, Amort_Sch) %>%
+  mutate(Plan = factor(Plan, levels = c("Total All Plans", sort(unique(Amort_Sch$Plan))))) %>%
+  arrange(Plan, FY)
+
+Amort_combined %>%
+  mutate(
+    Balance = dollar(Balance, accuracy = 1),
+    Payment = dollar(Payment, accuracy = 1)
+  ) %>%
+  flextable() %>%
+  set_caption("Table 4: Amortization Schedule through FY 2030") %>%
+  set_header_labels(
+    FY = "Fiscal Year",
+    Plan = "Plan",
+    Balance = "Ending Balance",
+    Payment = "Payment"
+  ) %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  bold(i = c(1, 5), j = 4, bold = TRUE) %>%   # added
+  color(i = c(1, 5), j = 4, color = "red") %>% # added
+  autofit()
+```
+
+\newpage
+```{r chart-4, fig.height=8}
+
+
+# Chart 4
+
+# Step 1: Compute padded y-limits per plan
+y_lims <- Amort_combined %>%
+  filter(Plan %in% c("Total All Plans", "Classic Safety", "Classic Misc")) %>%
+  mutate(Payment_numeric = as.numeric(gsub("[$,]", "", Payment))) %>%
+  group_by(Plan) %>%
+  summarise(max_y = max(Payment_numeric) * 1.15, .groups = "drop")
+
+# Step 2: Join max_y back to data
+Amort_plot_data <- Amort_combined %>%
+  filter(Plan %in% c("Total All Plans", "Classic Safety", "Classic Misc")) %>%
+  mutate(
+    FY = as.integer(FY),
+    Payment_numeric = as.numeric(gsub("[$,]", "", Payment)),
+    Plan = factor(Plan, levels = c("Total All Plans", "Classic Safety", "Classic Misc"))
+  ) %>%
+  left_join(y_lims, by = "Plan")
+
+# Step 3: Plot with manual y-limits for each facet using facet_wrap + expand
+ggplot(Amort_plot_data, aes(x = FY, y = Payment_numeric)) +
+  geom_col(fill = "steelblue") +
+  geom_text(
+    aes(label = dollar(Payment_numeric, accuracy = 1)),
+    vjust = -0.3,
+    size = 3.5
+  ) +
+  facet_wrap(~ Plan, ncol = 1, scales = "free_y") +
+  scale_y_continuous(
+    labels = dollar_format(accuracy = 1),
+    expand = expansion(mult = c(0, 0.15))  # Add space above bars
+  ) +
+  scale_x_continuous(breaks = seq(2026, 2030, 1)) +
+  labs(
+    title = "Chart 4: UAL Payments through FY 2030",
+    x = "Fiscal Year",
+    y = "UAL Payment"
+  ) +
+  theme_base
+
+
+
+```
+
+
+\newpage
+
+**Table 5** shows the projected payments for FY 2026 for the Classic Safety Plan. As you can see, the projections keep on increasing. That is because the CalPERS assumptions tend to be overly optimistic.
+
+
+```{r}
+Table5_plot <- read_excel(excel_path, sheet = "Amort 2026 Classic Safety") %>%
+  mutate(
+    FY = as.character(FY),
+    `UAL Payment` = as.numeric(`UAL Payment`)
+  )
+
+flextable(Table5_plot) %>%
+  set_caption("Table 5: FY 2026 Payment Projections – Classic Safety Plan") %>%
+  set_header_labels(
+    FY = "Projection Made In",
+    `UAL Payment` = "Projected FY 2026 Payment"
+  ) %>%
+  colformat_num(j = "UAL Payment", digits = 0, prefix = "$") %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  autofit()
+```
+
+
+
+
+\newpage
+```{r}
+# Create dataframe for Table 5
+table5_data <- tibble::tibble(
+  Year = c("2024", "2025", "2026"),
+  Payment = c(4145733, 5245262, 5496179)
+)
+
+# Plot: Bar chart for Table 5
+ggplot(table5_data, aes(x = Year, y = Payment)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  geom_text(aes(label = scales::dollar(Payment, accuracy = 1)), 
+            position = position_dodge(width = 0.9), 
+            vjust = -0.3, size = 3) +  # added: value labels above bars 
+  labs(
+    title = "FY 2026 Payment Projections – Classic Safety Plan",
+    x = "Projection Made In",
+    y = "Projected FY 2026 Payment"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format()) +
+  theme_bw() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "bold"),
+    axis.title = element_text(size = 12),
+    axis.text = element_text(size = 10),
+    panel.border = element_blank(),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.background = element_blank()
+  )
+```
+
+\newpage
+
+**Table 6** shows the increase in UAL because El Cerrito makes minimum payments. The state auditor recommended that the city make additional payments. 
+Given the importance of the Unfunded Accrued Liability, the history is presented as both a bar chart and a line chart.
+
+
+
+
+```{r funded-history}
+Funded_History <- read_excel(excel_path, sheet = "Funded History") %>%
+  
+  clean_names() %>%
+  rename(
+    date = valuation_date,
+    accrued_liability = accrued_liability_al,
+    mva = share_of_pool_s_market_value_of_assets_mva,
+    ual = unfunded_accrued_liability_ual,
+    funded_ratio = funded_ratio,
+    payroll = annual_covered_payroll
+  ) %>%
+  mutate(
+    date = as.Date(date),
+    accrued_liability = dollar(as.numeric(accrued_liability), accuracy = 1),
+    mva = dollar(as.numeric(mva), accuracy = 1),
+    ual = dollar(as.numeric(ual), accuracy = 1),
+    funded_ratio = percent(as.numeric(funded_ratio), accuracy = 0.1),
+    payroll = dollar(as.numeric(payroll), accuracy = 1)
+  ) %>%
+  select(plan, date, accrued_liability, mva, ual, funded_ratio, payroll)
+
+flextable(Funded_History) %>%
+  set_caption("Table 6: Historical Funding Status by Plan") %>%
+  set_header_labels(
+    plan = "Plan",
+    date = "Valuation Date",
+    accrued_liability = "Accrued Liability",
+    mva = "Market Value of Assets",
+    ual = "Unfunded Accrued Liability",
+    funded_ratio = "Funded Ratio",
+    payroll = "Covered Payroll"
+  ) %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  bold(i = c(1, 10), j = 5, bold = TRUE) %>%    # added
+  color(i = c(1, 10), j = 5, color = "red") %>% # added
+  set_table_properties(width = 0.9, layout = "autofit") |> 
+  autofit()
+```
+
+\newpage
+
+
+
+```{r}
+# Chart: Unfunded Accrued Liability – Classic Safety Plan (Bar Chart) # added
+Funded_History_safety <- Funded_History %>%
+  filter(plan == "Classic Safety") %>%
+  mutate(
+    year = format(date, "%Y"),
+    ual_value = as.numeric(gsub("[$,]", "", ual)),  # remove dollar sign and commas # added
+    ual_label = paste0("$", round(ual_value / 1e6, 1), "M")  # format as "$28.1M" # added
+  )
+
+ggplot(Funded_History_safety, aes(x = year, y = ual_value)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = ual_label), vjust = -0.5, size = 3) +  # added: formatted labels
+  labs(
+    title = "Unfunded Accrued Liability – Classic Safety Plan",
+    x = "Valuation Year", y = "Unfunded Liability"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format(accuracy = 1)) +  # added: USD y-axis
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 12, face = "bold")
+  )
+
+```
+
+
+\newpage
+
+
+```{r}
+# Prepare Classic Safety data with manual label positions # added
+safety_labeled <- Funded_History %>%
+  filter(plan == "Classic Safety") %>%
+  mutate(
+    year = format(date, "%Y"),
+    ual_numeric = as.numeric(gsub("[$,]", "", ual)),  # added: numeric version
+    label = ifelse(year %in% c("2014", "2018", "2023"), ual, NA),
+    vpos = case_when(  # added: vertical positioning
+      year == "2014" ~ -0.2,
+      year == "2018" ~ -1.0,
+      year == "2023" ~ 0.3,
+      TRUE ~ NA_real_
+    ),
+    hpos = case_when(  # added: horizontal positioning
+      year == "2014" ~ -0.4,
+      year == "2018" ~ 0.8,
+      year == "2023" ~ 1.2,
+      TRUE ~ NA_real_
+    )
+  )
+
+# Plot with manually adjusted label positions # added
+ggplot(safety_labeled, aes(x = as.factor(year), y = ual_numeric)) +
+  geom_line(aes(group = 1), color = "steelblue", size = 1) +
+  geom_point(color = "steelblue", size = 3) +
+  geom_text(aes(label = label, vjust = vpos, hjust = hpos), size = 3, na.rm = TRUE) +  # added: manual position
+  labs(
+    title = "Unfunded Accrued Liability – Classic Safety Plan",
+    x = "Valuation Year", y = "UAL"
+  ) +
+  scale_y_continuous(labels = scales::dollar_format(accuracy = 1)) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(hjust = 0.5, size = 12, face = "bold")
+  )
+
+
+```
+
+
+
+\newpage
+
+**Table 7** Pension risk measures.
+
+CalPERS uses a number of different metrics to assess risks. Plans with poor risk metrics are more vulnerable. El Cerrito plans are very vulnerable. I focus on the most important plan, the Classic Safety Plan.
+
+As pension plans mature they become more sensitive to risks. One way to look at the maturity level of CalPERS and its plans is to look at the ratio of a plan’s retiree liability to its total liability.
+
+**Retiree Liability Ratio.** Preferred is below 60%. El Cerrito Classic Safety is 73%. Computed as follows. Retiree Accrued Liability is $125,887,376. Total Accrued Liability is $173,318,081. Now divide the first number by the second number. This measures Ratio of Retiree Accrued Liability to Total Accrued Liability.
+
+**Asset Volatility Ratio (AVR).** Preferred is below 4. El Cerrito Classic Safety is 19.7. Market Value of Assets is Market Value of Assets is  $110,862,862.  Payroll is $5,618,797. Now divide the first number by the second. It is the ratio of market value of assets to payroll. Plans that have a higher AVR experience more volatile employer contributions (as a percentage of payroll) due to investment return. For example, a plan with an AVR of about 20 may experience five times the contribution volatility due to investment return volatility than a plan with an AVR of 4. 
+
+**Liability Volatility Ratio (LVR).** Preferred is below 3. El Cerrito Classic Safety is 30.8. 
+Accrued Liability is $173,318,081. Payroll is $5,618,797. Now divide the first number by the second. Liability volatility ratio (LVR) is the ratio of accrued liability to payroll. Plans that have a higher LVR experience more volatile employer contributions (as a percentage of payroll) due to changes in liability. For example, a plan with an LVR of 30 is expected to have ten times the contribution volatility of a plan with an LVR of 3 when there is a change in accrued liability, such as when there is a change in actuarial assumptions.
+
+Now divide the first number by the second. 
+
+**Support Ratio.** Preferred is above 50%. El Cerrito Classic is 21%. The number of active employees is 31. The number of retirees is 146. . Now divide the first number by the second. The support ratio for all CalPERS plans is 77%. 
+
+```{r volatility-metrics}
+LVR_raw <- read_excel(excel_path, sheet = "Liability Volatility Ratio") %>%
+  clean_names() %>%
+  rename(
+    date = valuation_date,
+    retiree_ratio = retiree_accrued_liability_to_total_accrued_liability,
+    support_ratio = support_ratio,
+    avr = asset_volatility_ratio,
+    lvr = liability_volatility_ratio,
+    plan = plan
+  ) %>%
+  mutate(
+    date = as.Date(date),
+    avr = as.numeric(gsub(",", "", avr)),
+    lvr = as.numeric(gsub(",", "", lvr))
+  )
+
+LVR_formatted <- LVR_raw %>%
+  mutate(
+    retiree_ratio = percent(retiree_ratio, accuracy = 0.1),
+    support_ratio = percent(support_ratio, accuracy = 0.1),
+    avr = round(avr, 1),
+    lvr = round(lvr, 1)
+  )
+
+LVR_safety <- LVR_formatted %>% filter(plan == "Classic Safety") %>% select(-plan)
+LVR_misc <- LVR_formatted %>% filter(plan == "Classic Misc") %>% select(-plan)
+
+flextable(LVR_safety) %>%
+  set_caption("Table 7A: Volatility Metrics – Classic Safety Plan") %>%
+  set_header_labels(
+    date = "Valuation Date",
+    retiree_ratio = "Retiree Liability Ratio",
+    support_ratio = "Support Ratio",
+    avr = "Asset Volatility Ratio",
+    lvr = "Liability Volatility Ratio"
+  ) %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  bold(i = c(1, 7), j = 2:5, bold = TRUE) %>%    # added
+  color(i = c(1, 7), j = 2:5, color = "red") %>% # added
+  set_table_properties(width = 0.9, layout = "autofit") |> 
+  autofit()
+
+flextable(LVR_misc) %>%
+  set_caption("Table 7B: Volatility Metrics – Classic Misc Plan") %>%
+  set_header_labels(
+    date = "Valuation Date",
+    retiree_ratio = "Retiree Liability Ratio",
+    support_ratio = "Support Ratio",
+    avr = "Asset Volatility Ratio",
+    lvr = "Liability Volatility Ratio"
+  ) %>%
+  fontsize(size = 10, part = "all") %>%
+  align(align = "left", part = "all") %>%
+  bold(part = "header") %>%
+  bold(i = c(1, 7), j = 2:5, bold = TRUE) %>%    # added
+  color(i = c(1, 7), j = 2:5, color = "red") %>% # added
+  set_table_properties(width = 0.9, layout = "autofit") |> 
+  autofit()
+```
+
+\newpage
+
+```{r}
+# Chart 7A: Retiree Liability Ratio – Classic Safety Plan (percent y-axis, enhanced annotation) # added
+ggplot(LVR_safety, aes(x = as.factor(format(date, "%Y")), 
+                       y = as.numeric(gsub("%", "", retiree_ratio)) / 100)) +  # divide by 100 for percent scale
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = retiree_ratio), vjust = -0.5, size = 3) +  # value labels
+  geom_hline(yintercept = 0.60, linetype = "dashed", color = "red", size = 1) +  # reference line
+  geom_label(aes(x = 4.8, y = 0.635, label = "Lower is better"),  # adjusted position
+             fill = "white", color = "red", size = 3.5, label.size = 0) +  # white background for clarity
+  labs(
+    title = "Retiree Liability Ratio – Classic Safety Plan",
+    x = "Valuation Year", y = "Ratio"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+
+\newpage
+```{r}
+# Chart 7A: Retiree Liability Ratio – Classic Misc Plan (annotation repositioned) # updated
+ggplot(LVR_misc, aes(x = as.factor(format(date, "%Y")), 
+                     y = as.numeric(gsub("%", "", retiree_ratio)) / 100)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = retiree_ratio,
+                vjust = ifelse(format(date, "%Y") == "2021", -0.8, -0.5)), size = 3) +  # added: lift 2021 label
+  geom_hline(yintercept = 0.60, linetype = "dashed", color = "red", size = 1) +
+  geom_label(aes(x = 5.6, y = 0.66, label = "Lower is better"),  # moved label further right and higher # updated
+             fill = "white", color = "red", size = 3.5, label.size = 0) +
+  labs(
+    title = "Retiree Liability Ratio – Classic Misc Plan",
+    x = "Valuation Year", y = "Ratio"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+
+
+```
+
+\newpage
+
+```{r}
+# Chart 7B: Asset Volatility Ratio – Classic Safety Plan # added
+ggplot(LVR_safety, aes(x = as.factor(format(date, "%Y")), y = avr)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(avr, 1)), vjust = -0.5, size = 3) +  # added: value labels
+  geom_hline(yintercept = 4.0, linetype = "dashed", color = "red", size = 1) +  # added: reference line
+  geom_label(aes(x = 5.6, y = 5.0, label = "Lower is better"),  # added: annotation above and to the right
+             fill = "white", color = "red", size = 3.5, label.size = 0) +
+  labs(
+    title = "Asset Volatility Ratio – Classic Safety Plan",
+    x = "Valuation Year", y = "AVR"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+\newpage
+
+```{r}
+# Chart 7B: Asset Volatility Ratio – Classic Misc Plan # updated
+ggplot(LVR_misc, aes(x = as.factor(format(date, "%Y")), y = avr)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(avr, 1)), vjust = -0.5, size = 3) +  # added: value labels
+  geom_hline(yintercept = 4.0, linetype = "dashed", color = "red", size = 1) +  # reference line
+  geom_label(aes(x = 5.6, y = 4.8, label = "Lower is better"),  # updated: moved up from y = 4.3
+             fill = "white", color = "red", size = 3.5, label.size = 0) +  # annotation box
+  labs(
+    title = "Asset Volatility Ratio – Classic Misc Plan",
+    x = "Valuation Year", y = "AVR"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+\newpage
+
+```{r}
+
+# Chart 7C: Liability Volatility Ratio – Classic Safety Plan
+ggplot(LVR_safety, aes(x = as.factor(format(date, "%Y")), y = lvr)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(lvr, 1)), vjust = -0.5, size = 3) +  # added: value labels
+  geom_hline(yintercept = 3.0, linetype = "dashed", color = "red", size = 1) +  # reference line
+  geom_label(aes(x = 5.6, y = 4.7, label = "Lower is better"),  # adjusted position
+             fill = "white", color = "red", size = 3.5, label.size = 0) +  # annotation box
+  labs(
+    title = "Liability Volatility Ratio – Classic Safety Plan",
+    x = "Valuation Year", y = "LVR"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+\newpage
+
+```{r}
+# Chart 7C: Liability Volatility Ratio – Classic Misc Plan
+ggplot(LVR_misc, aes(x = as.factor(format(date, "%Y")), y = lvr)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = round(lvr, 1)), vjust = -0.5, size = 3) +  # added: value labels
+  geom_hline(yintercept = 3.0, linetype = "dashed", color = "red", size = 1) +  # reference line
+  geom_label(aes(x = 5.6, y = 4.0, label = "Lower is better"),  # adjusted position
+             fill = "white", color = "red", size = 3.5, label.size = 0) +  # annotation box
+  labs(
+    title = "Liability Volatility Ratio – Classic Misc Plan",
+    x = "Valuation Year", y = "LVR"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+
+
+```
+
+
+\newpage
+
+```{r}
+
+# Chart 7D: Support Ratio – Classic Safety Plan
+ggplot(LVR_safety, aes(x = as.factor(format(date, "%Y")), 
+                       y = as.numeric(gsub("%", "", support_ratio)) / 100)) +  # percent scale
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = support_ratio), vjust = -0.5, size = 3) +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "red", size = 1) +
+  geom_label(aes(x = 5.6, y = 0.56, label = "Higher is better"),
+             fill = "white", color = "red", size = 3.5, label.size = 0) +
+  labs(
+    title = "Support Ratio – Classic Safety Plan",
+    x = "Valuation Year", y = "Support Ratio"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+```
+
+
+\newpage
+
+
+```{r}
+# Chart 7D: Support Ratio – Classic Misc Plan
+ggplot(LVR_misc, aes(x = as.factor(format(date, "%Y")), 
+                     y = as.numeric(gsub("%", "", support_ratio)) / 100)) +  # percent scale
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = support_ratio), vjust = -0.5, size = 3) +
+  geom_hline(yintercept = 0.50, linetype = "dashed", color = "red", size = 1) +
+  geom_label(aes(x = 5.6, y = 0.56, label = "Higher is better"),
+             fill = "white", color = "red", size = 3.5, label.size = 0) +
+  labs(
+    title = "Support Ratio – Classic Misc Plan",
+    x = "Valuation Year", y = "Support Ratio"
+  ) +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 0, hjust = 0.5),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")
+  )
+
+```
+
+
+\newpage
+
+
+
+## Appendix
+
+# Key CalPERS Assumptions in Calculating Unfunded Accrued Liability (UAL)
+CalPERS uses a variety of actuarial assumptions when estimating the Unfunded Accrued Liability (UAL) for its pension plans. These assumptions reflect expected economic and demographic behavior over the long term. The primary assumptions are listed below:
+•	Investment Return Assumption (Discount Rate)
+Currently 6.8% (as of June 30, 2023). This is the expected long-term average return on investments, used to discount future liabilities to present value. A lower discount rate increases UAL.
+•	Wage (Salary) Growth Assumptions
+Assumes 2.75%–3.0% annual growth, which includes 2.5% inflation and step/career progression. Service-based increases vary by plan (e.g., 0.5–1.0% for Classic Miscellaneous; higher for Classic Safety).
+•	Inflation
+CalPERS assumes a 2.5% annual inflation rate, which informs wage growth and post-retirement COLA adjustments.
+•	Mortality and Longevity
+CalPERS uses its own mortality tables with adjustments for expected improvements in longevity. Longer life expectancy increases liabilities.
+•	Retirement and Termination Rates
+Rates differ by plan type (Safety vs. Miscellaneous) and estimate when employees will retire or leave employment.
+•	Cost-of-Living Adjustments (COLA)
+Typically 2.0% annually, subject to plan caps. Applied to pensions of retirees.
+•	Amortization Assumptions
+Unexpected gains and losses are amortized over 20 years using a 5-year ramp-up/down method, assuming consistent contributions and returns.
+
+ 
+## Summary: Pension Math – Public Pension Spending and Service Crowd Out in California (2003–2030) ##
+
+This report analyzes the growing burden of pension obligations on California governments and its impact on public service funding. Using detailed data from the California Public Employees' Retirement System (CalPERS) and the California State Teachers' Retirement System (CalSTRS), it quantifies how pension costs have risen and are projected to continue rising, crowding out local and state public services.
+
+
+### Key Findings:
+
+- Pension Costs Have More Than Tripled: From 2003 to 2018, public employer contributions to CalPERS and CalSTRS rose from $6.4 billion to over $21 billion.
+
+- Projected to Double Again: By 2030, contributions could exceed $50 billion annually under current assumptions.
+
+- Service Crowd-Out Is Real: The growth in pension costs has reduced the funds available for essential services such as education, public safety, and infrastructure. Some school districts and cities have had to lay off staff or reduce programs.
+
+- Drivers of Cost Growth:
+
+  - Lower-than-expected investment returns.
+
+  - Changes to actuarial assumptions (e.g., longer life expectancy, lower discount rates).
+
+  - A large increase in unfunded accrued liabilities (UALs) after the dot-com crash and Great Recession.
+
+- Future Risks Remain: Even with reform efforts, such as PEPRA (2013), most pension debt stems from earlier benefit enhancements and investment shortfalls. Any future downturn could further increase liabilities.
+
+- Policy Implications: The report suggests that unless additional reforms are implemented or governments reduce benefits or increase revenues, the crowd-out of services will worsen.
+
+
+### Conclusion:
+
+Pension obligations in California represent a significant and growing fiscal challenge. If unchecked, they will continue to erode the capacity of local and state governments to provide core services. The report calls for honest discussions and further policy adjustments to balance pension promises with fiscal sustainability.
+
+## Recent Analyses of U.S. Public Pension Systems (2024)
+
+1. Public Pensions Are Mixing Risky Investments with Unrealistic Predictions
+
+Source: Stanford Institute for Economic Policy Research (SIEPR), February 2024
+
+Authors: Joshua Rauh and Oliver Giesecke
+
+URL: https://siepr.stanford.edu/news/public-pensions-are-mixing-risky-investments-unrealistic-predictions
+
+
+This analysis explores how U.S. public pension systems remain underfunded despite strong market returns from 2014 to 2022. The authors estimate that the official $1.6 trillion unfunded liability could actually be as high as $5.1 trillion if liabilities were calculated using more realistic assumptions. This implies that the true funded ratio could be below 50% for many plans.
+
+
+Key concerns include:
+
+- Unrealistic discount rate assumptions used to value liabilities.
+
+- Increased reliance on alternative investments such as private equity and real estate to chase higher returns.
+
+- Risk of systemic instability due to underperformance or valuation uncertainty in illiquid asset classes.
+
+
+The report warns that public pension plans are pursuing yield in ways that could amplify volatility and make systems more vulnerable during downturns.
+
+
+2. Pension Plan Funded Ratio Rankings 2024
+
+Source: Equable Institute, 2024
+
+URL: https://equable.org/state/california/
+
+
+This report provides updated funded ratio statistics and risk assessments for public pension plans across the United States. In 2024, the average funded ratio improved modestly from 75.5% to around 80.2%, largely due to strong market performance (average return ~10.3%).
+
+
+However, key concerns persist:
+
+- Total unfunded liabilities remain approximately $1.4 trillion.
+
+- Many plans remain below the recommended 90% funded ratio.
+
+- Dependence on investment returns continues to obscure the structural imbalance between promised benefits and contributions.
+
+
+The report notes that while California’s plans have experienced funding gains, the improvements are fragile and heavily market-dependent.
+
+
+Comparison of Discount Rates: CalPERS vs. Private Pension Plans
+
+This summary compares the discount rate used by CalPERS, a major U.S. public pension system, with those typically used by private sector pension plans in the United States.
+
+Feature	CalPERS (Public)	Private Pension Plans	Implications
+
+Discount Rate	6.8%	4.8% – 5.4%	Private plans report higher liabilities due to lower rates.
+
+Basis	Expected long-term returns	High-quality corporate bond yields (AA)	Private plans are more market-based.
+
+Accounting Standard	GASB	FASB / ERISA	Different rules for liability calculation.
+
+Valuation Impact	Lower liabilities	More conservative (higher liabilities)	Public pensions may appear better funded.
+
+### Sources and References
+
+1. Milliman 2024 Corporate Pension Funding Study: https://us.milliman.com/en/insight/2024-milliman-corporate-pension-funding-study
+
+2. Mercer U.S. Pension Buyout Index: https://www.mercer.com/insights/retirement/us-pension-buyout-index/
+
+3. U.S. Treasury Segment Rates: https://www.irs.gov/retirement-plans/minimum-present-value-segment-rates
+
+
+\newpage
+
+**Technical Notes**  
+The El Cerrito pension data was extracted from CalPERS documents using Power Query (AKA Excel Data/Get Data). The report was then analyzed using the R statistical programming language. The report was produced using R Markdown in the RStudio environment. ChatGPT was utilized to expedite the process.
+
+
+\newpage
+
+## References
+
+1 El Cerrito Council Meetings, https://el-cerrito.org/482/Council-Meeting-Videos-Materials
+
+2 CalPERS Valuation Reports, https://www.calpers.ca.gov/employers/actuarial-resources/public-agency-actuarial-valuation-reports
+
+3 Simmons, Lee; “Public Pensions Are Mixing Risky Investments with Unrealistic Predictions”, https://www.gsb.stanford.edu/insights/public-pensions-are-mixing-risky-investments-unrealistic-predictions
+
+4 Nation, Joe: “Pension Math: Public Pension Spending and Service Crowd Out in California, 2003-2030” https://drive.google.com/file/d/1tBE6ILLGPJd0dtz8YugZlD1zvvcSdESP/view
+
+5 El Cerrito Labor Agreements, https://www.el-cerrito.org/229/Labor-Relations
+
+6 California State Auditor Audit of El Cerrito, https://information.auditor.ca.gov/reports/2020-803/cap/index.html
+
+7 California Policy Center Local Fiscal Health Dashboard, https://californiapolicycenter.org/fiscal-health-dashboard/#el-cerrito
+
