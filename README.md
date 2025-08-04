@@ -27,6 +27,6 @@ Key outputs from the project include:
 ## 📫 Contact
 
 Ira Sharenow  
-📧 irasharenow@gmail.com
+📧 irasharenow100@gmail.com
 ---
 
